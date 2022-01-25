@@ -1,1 +1,4 @@
 build
+
+# Workspace Settings
+*.code-workspace
