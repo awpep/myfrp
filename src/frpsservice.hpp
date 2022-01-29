@@ -41,7 +41,7 @@ private:
     void Listen();
     void connection_request();
     bool is_frpc(const struct sockaddr_in& client);
-    RET_CODE write_to_buffer(short num);
+    RET_CODE write_to_buffer(in_port_t num);
     RET_CODE write_to_frpc(int length);
 
 public:
@@ -79,7 +79,7 @@ void Service::start(){
     RET_CODE res;
     struct sockaddr_in client_addr;
     socklen_t client_len = sizeof(client_addr);
-    short conn_need = 0;
+    in_port_t conn_need = 0;
     while(!stop){
         // 侦听listenfd的读事件和connection的写事件， 暂时没有超时需要考虑
         num = epoll_wait(epollfd, events, EVENTS_SIZE, -1);
@@ -118,7 +118,7 @@ void Service::start(){
                     stop = true;
                     break;
                 }
-                res = write_to_frpc(2*sizeof(short));
+                res = write_to_frpc(2*sizeof(in_port_t));
                 // 长连接关闭意味着无法与frpc进行通信，相应的服务没法进行
                 // 需要关闭长连接和服务侦听
                 switch(res){
@@ -188,13 +188,13 @@ bool Service::is_frpc(const struct sockaddr_in& client){
 
 
 // 发送 端口 需求连接数量
-RET_CODE Service::write_to_buffer(short num){
-    if(2*sizeof(short)>BUFFER_SIZE){
+RET_CODE Service::write_to_buffer(in_port_t num){
+    if(2*sizeof(in_port_t)>BUFFER_SIZE){
         LOG(ERROR) << "the buffer is not enough to send remote_port and conns";
         exit(1);
     }
     memeset(buffer, '\0', BUFFER_SIZE);
-    short* p = (short*)buffer;
+    in_port_t* p = (in_port_t*)buffer;
     *p++ = ntohs(serv_addr.sin_port);
     *p = num;
     return OK;

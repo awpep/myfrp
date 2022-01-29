@@ -27,12 +27,12 @@ private:
     int backward_read_idx, backward_write_idx;
 
     // remote_port-->locals映射
-    unordered_map<short, struct sockaddr_in>locals;
+    unordered_map<in_port_t, struct sockaddr_in>locals;
 
 // 对象的公共成员
 public:
     // frpc的工作线程
-    FRPCManager(int ffd1, const unordered_map<short, struct sockaddr_in>&los);
+    FRPCManager(int ffd1, const unordered_map<in_port_t, struct sockaddr_in>&los);
     ~FRPCManager();
     // 侦听
     int epollfd;
@@ -60,7 +60,7 @@ public:
 const int FRPCManager::EVENTS_SIZE = 5;
 const int FRPCManager::BIG_BUFFER_SIZE = 65535;
 
-FRPCManager::FRPCManager(int ffd1, const unordered_map<short, struct sockaddr_in>&los):
+FRPCManager::FRPCManager(int ffd1, const unordered_map<in_port_t, struct sockaddr_in>&los):
         fd1(ffd1), fd2(-1), locals(los),
         forward_read_idx(0), forward_write_idx(0),
         backward_read_idx(0), backward_write_idx(0){
@@ -224,7 +224,7 @@ void* FRPCManager::start_frpc_routine(void* arg){
 
 int FRPCManager::connect_local(){
     // 从socket中读取端口
-    int buffer_idx=0, length=sizeof(short);
+    int buffer_idx=0, length=sizeof(in_port_t);
     int bytes_read=0;
     char* buffer = new char[length];
     while(true){
@@ -248,7 +248,7 @@ int FRPCManager::connect_local(){
         LOG(ERROR) << "read port nothing from frps";
         return -1;
     }
-    short remote_port = *(short*)buffer;
+    in_port_t remote_port = *(in_port_t*)buffer;
     delete []buffer;
     if(remote_port<0){
         LOG(ERROR) << "the remote port is negative";
@@ -269,15 +269,15 @@ int FRPCManager::connect_local(){
         return -1;
     }
     return local_conn;
-    // 后续准备向远程发送ok状态码(就是short 0)
+    // 后续准备向远程发送ok状态码(就是in_port_t 0)
 }
 
 // 进行状态发送
 int FRPCManager::send_state(){
-    int length=sizeof(short), buffer_idx=0;
+    int length=sizeof(in_port_t), buffer_idx=0;
     int bytes_write = 0;
     char* buffer = new char[length];
-    *(short*)buffer = 0;
+    *(in_port_t*)buffer = 0;
     while(true){
         if(buffer_idx>=length){
             delete [] buffer;

@@ -41,7 +41,7 @@ private:
     // 向服务端发起来接的地址
     struct sockaddr_in frps_addr;
     // remote_port-->sockaddr_in的映射
-    unordered_map<short, struct sockaddr_in>locals;
+    unordered_map<in_port_t, struct sockaddr_in>locals;
     // 和frpc的固定连接
     int connection;
 
@@ -54,7 +54,7 @@ private:
     // 发送心跳
     int send_heart_beat();
     // 读取连接需求数量
-    int read_conn(short& conns);
+    int read_conn(in_port_t& conns);
     // 分配新的远端连接
     int arrange_new_pair(int &remote_conn);
 
@@ -66,7 +66,7 @@ private:
     int heart_count;
 
 public:
-    Master(const string& serv_ip, short serv_port, const unordered_map<short, short>&ports);
+    Master(const string& serv_ip, in_port_t serv_port, const unordered_map<in_port_t, in_port_t>&ports);
     ~Master();
     void start();    
 };
@@ -76,24 +76,31 @@ const int Master::EVENTS_SIZE = 5;
 const int Master::TIME_OUT = 30000;
 const int Master::MAX_HEART_BEATS = 3;
 
-Master::Master(const string& serv_ip, short serv_port, const unordered_map<short, short>&ports):
-        heart_count(0){
+Master::Master(const string& serv_ip, in_port_t serv_port, const unordered_map<in_port_t, in_port_t>&ports):
+        heart_count(0)
+{
+    // 有待商榷，暂时不改
     buffer = new char[BUFFER_SIZE];
     epollfd = epoll_create(1);
 
     // 记录frps_addr
     bzero(&frps_addr, sizeof(frps_addr));
+    // IPv4
     frps_addr.sin_family = AF_INET;
+    // 字符串转网络字节序，并存入frps_addr.sin_addr中
     inet_pton(AF_INET, serv_ip.c_str(), &frps_addr.sin_addr);
+    // 转换字节序
     frps_addr.sin_port = htons(serv_port);
 
     // 构建remote_port-->struct sockaddr_in的映射
     struct sockaddr_in local_addr;
-    for(auto iter: ports){
-        short remote_port = iter.first, local_port = iter.second;
-        bzero(&local_addr, sizeof(local_addr));
-        local_addr.sin_family = AF_INET;
-        local_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+    // 重复工作没必要放入循环体中
+    bzero(&local_addr, sizeof(local_addr));
+    local_addr.sin_family = AF_INET;
+    local_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+    for(const auto& [remote_port,local_port]: ports){
         local_addr.sin_port = htons(local_port);
         locals[remote_port] = local_addr;
     }
@@ -108,6 +115,7 @@ Master::~Master(){
 void Master::start(){
     connection=Connect();
     if(connection==-1) return;
+
     bool stop = false;
     epoll_event events[EVENTS_SIZE];
     int num, res;
@@ -137,9 +145,9 @@ void Master::start(){
                 // 进行数据的侦听
                 modfd(epollfd, connection, EPOLLIN);
             }
-            // 读取内容格式为conn_need 至于是给具体哪个服务在子线程内部决定
+            // 读取内容格式为 conn_need 至于是给具体哪个服务在子线程内部决定
             else if(events[i].data.fd==connection && (events[i].events & EPOLLIN)){
-                short conns;
+                in_port_t conns;
                 res = read_conn(conns);
                 if(res==-1){
                    continue; // 如果出现错误直接忽略本次的请求
@@ -171,11 +179,13 @@ void Master::start(){
 }
 
 int Master::Connect(){
+    // 创建socket，变量名和成员变量重了
     int connection = socket(PF_INET, SOCK_STREAM, 0);
     if(connection<0){
         LOG(ERROR) << "create socket failed!";
         return -1;
     }
+    
     int ret=connect(connection, (struct sockaddr*)&frps_addr, sizeof(frps_addr));
     if(ret!=0){
         LOG(ERROR) << "connect frps failed!";
@@ -188,24 +198,25 @@ int Master::Connect(){
 }
 
 
-// 通信格式为port_len, port1, port2, ...均使用short型来发送
+// 通信格式为port_len, port1, port2, ...均使用in_port_t型来发送
 int Master::send_port(){
     // 填充数据
-    if(locals.size()>65535){
+    in_port_t port_num = locals.size();
+    if(port_num > 65535){
         LOG(ERROR) << "the max service port num is 65536";
         return -1;
     }
-    short port_num = locals.size();
-    if((port_num+1)*sizeof(short)>BUFFER_SIZE){
+    
+    if((port_num+1)*sizeof(in_port_t) > BUFFER_SIZE){
         LOG(ERROR) << "the buffer is not enough";
         return -1;
     }
-    short* p = (short*)buffer;
+    in_port_t* p = (in_port_t*)buffer;
     *p++ = port_num;
-    for(auto iter: locals) *p++ = iter.first;
+    for(const auto& iter: locals) *p++ = iter.first;
 
     // 通过网络进行数据发送
-    RET_CODE res = write_to_frps(sizeof(short)*(port_num+1));
+    RET_CODE res = write_to_frps(sizeof(in_port_t)*(port_num+1));
     switch(res){
         case IOERR:{
             LOG(ERROR) << "the frps error";
@@ -226,13 +237,13 @@ int Master::send_port(){
 }
 
 int Master::send_heart_beat(){
-    if(BUFFER_SIZE<sizeof(short)){
+    if(BUFFER_SIZE<sizeof(in_port_t)){
         LOG(ERROR) << "the buffer is not enough to send heart beat";
         return -1;
     };
-    *((short*)buffer) = -2;
+    *((in_port_t*)buffer) = -2;
 
-    RET_CODE res = write_to_frps(sizeof(short));
+    RET_CODE res = write_to_frps(sizeof(in_port_t));
     switch(res){
         case IOERR:{
             LOG(ERROR) << "the frps error";
@@ -270,7 +281,7 @@ int Master::arrange_new_pair(int &serv_conn){
 }
 
 
-int Master::read_conn(short& conns){
+int Master::read_conn(in_port_t& conns){
     // 先从frps中进行数据读取
     RET_CODE res = read_from_frps();
     switch(res){
@@ -290,7 +301,7 @@ int Master::read_conn(short& conns){
             break;
     }
     // 进行数据的解析
-    short* p = (short*)buffer;
+    in_port_t* p = (in_port_t*)buffer;
     conns = *p;
     if(conns<=0){
         LOG(ERROR) << "the conns need by remote_port is <=0";
@@ -309,6 +320,8 @@ RET_CODE Master::write_to_frps(int length){
         }
         // send返回0确实是服务器关闭了连接
         int retry = 0;
+
+        // TODO:不要goto，以后再改
         label:
         bytes_write = send(connection, buffer+buffer_idx, length-buffer_idx, MSG_NOSIGNAL);
         if(bytes_write==-1){

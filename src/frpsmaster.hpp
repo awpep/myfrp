@@ -48,7 +48,7 @@ private:
     // 和frpc的固定连接
     int connection;
     // 本地侦听的端口
-    short port;
+    in_port_t port;
 
     // 具体服务的侦听文件描述符
     vector<int>serv_listenfds;
@@ -57,9 +57,9 @@ private:
     int epollfd;
     
     // 功能
-    int Listen(short listen_port);
-    int recv_port(vector<short>&serv_ports);
-    int send_request(short conn_need);
+    int Listen(in_port_t listen_port);
+    int recv_port(vector<in_port_t>&serv_ports);
+    int send_request(in_port_t conn_need);
 
     // 底层读写
     RET_CODE read_from_frpc();
@@ -68,7 +68,7 @@ private:
     double interval(clock_t start_time);
     
 public:
-    Master(short listen_port);
+    Master(in_port_t listen_port);
     ~Master();
     void start();
 };
@@ -78,7 +78,7 @@ const int Master::EVENTS_SIZE = 5;
 const int Master::TIME_OUT = 40000;
 const int Master::MAX_HEART_BEATS = 3;
 
-Master::Master(short listen_port): port(listen_port), connection(-1){
+Master::Master(in_port_t listen_port): port(listen_port), connection(-1){
     buffer = new char[BUFFER_SIZE];
     epollfd = epoll_create(1);
 }
@@ -108,7 +108,7 @@ void Master::start(){
     socklen_t socklen = sizeof(frpc_addr);
 
     // 需要的连接数
-    short conn_need=0;
+    in_port_t conn_need=0;
     int heart_count=0;
 
     int num, ret;
@@ -117,13 +117,13 @@ void Master::start(){
     
     clock_t start_time = clock();
     // 建立listenfd和port的映射
-    unordered_map<int, short>maps;
+    unordered_map<int, in_port_t>maps;
     // 保存端口和连接
-    queue<pair<short, int>>clients;
+    queue<pair<in_port_t, int>>clients;
     queue<int>frpcs;
 
     // 保存端口
-    vector<short>serv_ports;
+    vector<in_port_t>serv_ports;
     
     while(!stop){
         // 有连接事件不代表存在connection事件或者心跳包，listenfd的不算
@@ -174,7 +174,7 @@ void Master::start(){
                         break;
                     }
                     case(0):{
-                        for(short port: serv_ports){
+                        for(in_port_t port: serv_ports){
                             int fd = Listen(port);
                             if(fd==-1){
                                 LOG(ERROR) << "the service start failed";
@@ -217,7 +217,7 @@ void Master::start(){
                     LOG(ERROR) << "wrong epollin event";
                     continue;
                 }
-                short port = maps[fd];
+                in_port_t port = maps[fd];
                 int client_fd = accept(fd, (struct sockaddr*)&client_addr, &socklen);
                 if(client_fd==-1){
                     LOG(ERROR) << "accept serv failed!";
@@ -265,7 +265,7 @@ void Master::start(){
 
 
 // -1出错 0 frpc发送的配置连接 1心跳包
-int Master::recv_port(vector<short>& serv_ports){
+int Master::recv_port(vector<in_port_t>& serv_ports){
     RET_CODE res = read_from_frpc();
     switch(res){
         case IOERR:{
@@ -287,8 +287,8 @@ int Master::recv_port(vector<short>& serv_ports){
         default:
             break;
     }
-    short* p = (short*)buffer;
-    short num = *p++;
+    in_port_t* p = (in_port_t*)buffer;
+    in_port_t num = *p++;
     if(num==-2) return 1;
     for(int i=0;i<num;++i){
         serv_ports.push_back(*p++);
@@ -296,14 +296,14 @@ int Master::recv_port(vector<short>& serv_ports){
     return 0;
 }
 
-int Master::send_request(short conn_need){
+int Master::send_request(in_port_t conn_need){
     if(BUFFER_SIZE<sizeof(conn_need)){
         LOG(ERROR) << "the buffer is not enough to send conn_need";
         return -1;
     }
-    *((short*)buffer)=conn_need;
+    *((in_port_t*)buffer)=conn_need;
 
-    RET_CODE res=write_to_frpc(sizeof(short));
+    RET_CODE res=write_to_frpc(sizeof(in_port_t));
     switch(res){
         case IOERR:{
             LOG(ERROR) << "the frpc error";
@@ -323,7 +323,7 @@ int Master::send_request(short conn_need){
     return 0;
 }
 
-int Master::Listen(short listen_port){
+int Master::Listen(in_port_t listen_port){
     struct sockaddr_in addr;
     bzero(&addr, sizeof(addr));
     addr.sin_family = AF_INET;

@@ -23,7 +23,7 @@ private:
     int backward_read_idx, backward_write_idx;
 
     // 可选的端口号
-    short port;
+    in_port_t port;
 public:
     // 侦听
     int epollfd;
@@ -59,7 +59,7 @@ Manager::Manager(int ffd1, int ffd2): fd1(ffd1), fd2(ffd2),
     epollfd = epoll_create(1);
 }
 
-Manager::Manager(short p, int ffd1, int ffd2): fd1(ffd1), fd2(ffd2),
+Manager::Manager(in_port_t p, int ffd1, int ffd2): fd1(ffd1), fd2(ffd2),
         forward_read_idx(0), forward_write_idx(0),
         backward_read_idx(0), backward_write_idx(0), port(p){
     

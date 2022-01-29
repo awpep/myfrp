@@ -23,11 +23,11 @@ private:
     int backward_read_idx, backward_write_idx;
 
     // 需要进行发送的端口号
-    short port;
+    in_port_t port;
 
 // 对象方法
 public:
-    FRPSManager(short port, int ffd1, int ffd2);
+    FRPSManager(in_port_t port, int ffd1, int ffd2);
     ~FRPSManager();
     // 侦听
     int epollfd;
@@ -50,7 +50,7 @@ public:
 const int FRPSManager::EVENTS_SIZE = 5;
 const int FRPSManager::BIG_BUFFER_SIZE = 65535;
 
-FRPSManager::FRPSManager(short p, int ffd1, int ffd2):
+FRPSManager::FRPSManager(in_port_t p, int ffd1, int ffd2):
         port(p), fd1(ffd1), fd2(ffd2),
         forward_read_idx(0), forward_write_idx(0),
         backward_read_idx(0), backward_write_idx(0){
@@ -213,7 +213,7 @@ int FRPSManager::send_port(){
     int buffer_idx = 0, length=sizeof(port);
     int bytes_write = 0;
     char buffer[length];
-    *((short*)buffer) = port;
+    *((in_port_t*)buffer) = port;
     while(true){
         // 发送完毕
         if(buffer_idx>=length){
@@ -238,7 +238,7 @@ int FRPSManager::send_port(){
 }
 
 int FRPSManager::recv_state(){
-    int buffer_idx = 0, length=sizeof(short)+1;
+    int buffer_idx = 0, length=sizeof(in_port_t)+1;
     int bytes_read = 0;
     char buffer[length];
     while(true){
@@ -263,7 +263,7 @@ int FRPSManager::recv_state(){
         LOG(ERROR) << "frpc send nothing";
         return -1;
     }
-    if(*(short*)buffer==0) return 0;
+    if(*(in_port_t*)buffer==0) return 0;
     return -1;
 }
 
