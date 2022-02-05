@@ -2,3 +2,6 @@ build
 
 # Workspace Settings
 *.code-workspace
+
+# log file
+*.log

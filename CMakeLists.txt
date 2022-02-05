@@ -28,3 +28,9 @@ add_executable(frpc src/easylogging++.cpp src/frpc.cpp)
 target_include_directories(frpc PRIVATE include)
 target_include_directories(frpc PRIVATE src)
 target_link_libraries(frpc PRIVATE Threads::Threads)
+
+# for frpc_zjq
+add_executable(frpc_zjq src/easylogging++.cpp src/frpc_zjq.cpp)
+target_include_directories(frpc_zjq PRIVATE include)
+target_include_directories(frpc_zjq PRIVATE src)
+target_link_libraries(frpc_zjq PRIVATE Threads::Threads)
